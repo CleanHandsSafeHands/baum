@@ -29,7 +29,7 @@ class SetValidator {
    */
   public function passes() {
     return $this->validateBounds() && $this->validateDuplicates() &&
-      $this->validateRoots();
+      $this->validateRoots() && $this->validateLeaves();
   }
 
   /**
@@ -89,6 +89,38 @@ class SetValidator {
       !$this->duplicatesExistForColumn($this->node->getQualifiedLeftColumnName()) &&
       !$this->duplicatesExistForColumn($this->node->getQualifiedRightColumnName())
     );
+  }
+
+  /**
+   * Checks that there are no "leaf" nodes where `rgt` - `lft` does not equal 1 which is expected
+   * for a fully valid nested set.
+   * 
+   * @return boolean
+   */
+  protected function validateLeaves() {
+    $connection = $this->node->getConnection();
+    $grammar    = $connection->getQueryGrammar();
+
+    $tableName = $this->node->getTable();
+    $lftCol    = $grammar->wrap($this->node->getLeftColumnName());
+    $rgtCol    = $grammar->wrap($this->node->getRightColumnName());
+
+    $qualifiedLftCol = $grammar->wrap($this->node->getQualifiedLeftColumnName());
+    $qualifiedRgtCol = $grammar->wrap($this->node->getQualifiedRightColumnName());
+
+    $query = $this->node->newQuery()
+      ->select($connection->raw('count(*) as dcount'))
+      ->leftjoin($connection->raw($grammar->wrapTable($tableName).' AS descendents'), function ($join) {
+        $join->on('descendents.'.$this->node->getLeftColumnName(), '>=', $this->node->getQualifiedLeftColumnName())
+          ->whereColumn('descendents.'.$this->node->getLeftColumnName(), '<', $this->node->getQualifiedRightColumnName())
+          ->whereNull('descendents.deleted_at');
+      })
+      ->whereNull($tableName . '.deleted_at')
+      ->whereRaw("(". $qualifiedRgtCol . ' - ' . $qualifiedLftCol .') <> 1')
+      ->groupBy($tableName . '.id')
+      ->havingRaw('dcount = 1');
+
+    return ($query->count() == 0);
   }
 
   /**
