@@ -1,5 +1,5 @@
 {
-  "name": "CHSH/baum",
+  "name": "chsh/baum",
   "type": "library",
   "description": "A fork of the etrepat nested set package with compatability for Laravel 8.",
   "keywords": ["nested set", "laravel", "laravel 8", "eloquent", "database"],
